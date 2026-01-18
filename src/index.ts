@@ -5,8 +5,9 @@ import { chat } from './services/ai';
 import { getOrCreateUser, getBalance, getKeypair } from './services/wallet';
 import { screenAddress } from './services/range';
 import { privateTransfer } from './services/shadowwire';
-import { sendSms } from './services/twilio';
-import type { PaymentIntent } from './types';
+import { getPrivateBalance, depositToPrivate, anonymousSend } from './services/privacycash';
+import { sendSms, sendWhatsApp, sendTypingIndicator } from './services/twilio';
+import type { PaymentIntent, AnonSendIntent, DepositIntent, WithdrawIntent } from './types';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
@@ -14,128 +15,198 @@ app.use(express.json());
 
 const WELCOME_MSG = `Welcome to HushPay! 🤫
 
-Send private payments via text. Your wallet is ready.
+Your wallet is ready. Two ways to send:
+• "send 1 sol to +234..." (amount hidden)
+• "send anon 1 sol to [wallet]" (sender hidden)
 
-Try:
-• "send 50 usd1 to +1234567890"
-• "what's my balance?"
-• "show my receipts"
+Commands: balance, deposit, withdraw, receipts, help`;
 
-Amounts are hidden on-chain. Quiet money moves.`;
+async function handleMessage(from: string, body: string, channel: 'sms' | 'whatsapp'): Promise<string> {
+  const { user, isNew } = await getOrCreateUser(from);
 
-// Twilio SMS webhook
-app.post('/sms', async (req, res) => {
-  const from = req.body.From;
-  const body = req.body.Body?.trim() || '';
+  if (isNew) return WELCOME_MSG;
 
-  console.log(`SMS from ${from}: ${body}`);
-
-  try {
-    // Get or create user
-    const { user, isNew } = await getOrCreateUser(from);
-
-    // Send welcome message for new users
-    if (isNew) {
-      res.type('text/xml').send(`<Response><Message>${WELCOME_MSG}</Message></Response>`);
-      return;
+  // Check for pending action confirmation
+  const isConfirm = /^(yes|confirm|y)$/i.test(body);
+  if (isConfirm) {
+    const pending = db.getPendingAction(from);
+    if (pending) {
+      return await executePendingAction(from, pending, channel);
     }
-
-    // Check for pending transfer confirmation
-    const isConfirm = /^(yes|confirm|y)$/i.test(body);
-    if (isConfirm) {
-      const pending = db.getPendingTransfer(from);
-      if (pending) {
-        const reply = await executeTransfer(from, pending);
-        res.type('text/xml').send(`<Response><Message>${reply}</Message></Response>`);
-        return;
-      }
-    }
-
-    // Process with AI
-    const { reply, intent } = await chat(from, body);
-
-    // Handle intents
-    let response = reply;
-
-    if (intent?.action === 'check_balance') {
-      const { sol, usd1 } = await getBalance(user.walletAddress);
-      response = `Your balance:\n• ${usd1.toFixed(2)} USD1\n• ${sol.toFixed(4)} SOL\n\nWallet: ${user.walletAddress.slice(0, 8)}...`;
-      db.saveMessage(from, 'assistant', response);
-    } else if (intent?.action === 'get_receipts') {
-      const transfers = db.getTransfers(from, 5);
-      if (transfers.length === 0) {
-        response = "No payments yet. Send your first one!";
-      } else {
-        response = "Recent payments:\n" + transfers.map(t => {
-          const dir = t.senderPhone === from ? '→' : '←';
-          const other = t.senderPhone === from ? t.recipientPhone : t.senderPhone;
-          return `${dir} ${t.amount} ${t.token} ${other.slice(-4)} (${t.status})`;
-        }).join('\n');
-      }
-      db.saveMessage(from, 'assistant', response);
-    } else if (intent?.action === 'send_payment') {
-      const p = intent as PaymentIntent;
-      db.savePendingTransfer(from, p.recipientPhone, p.amount, p.token);
-      // reply already set by AI
-    }
-
-    res.type('text/xml').send(`<Response><Message>${response}</Message></Response>`);
-  } catch (err) {
-    console.error('Error:', err);
-    res.type('text/xml').send(`<Response><Message>Something went wrong. Try again.</Message></Response>`);
   }
-});
 
-async function executeTransfer(senderPhone: string, pending: { recipientPhone: string; amount: number; token: string }): Promise<string> {
-  const sender = db.getUser(senderPhone);
-  if (!sender) return 'Error: User not found';
+  const { reply, intent } = await chat(from, body);
+  let response = reply;
 
-  // Get or create recipient
-  const { user: recipient } = await getOrCreateUser(pending.recipientPhone);
+  if (intent?.action === 'check_balance') {
+    const { sol, usd1 } = await getBalance(user.walletAddress);
+    const privateSol = await getPrivateBalance(user.encryptedPrivateKey, 'SOL');
+    response = `Your balance:\n\n📊 Public:\n• ${sol.toFixed(4)} SOL\n• ${usd1.toFixed(2)} USD1\n\n🔒 Private Pool:\n• ${privateSol.toFixed(4)} SOL\n\nWallet: ${user.walletAddress.slice(0, 8)}...`;
+    db.saveMessage(from, 'assistant', response);
+  } else if (intent?.action === 'get_wallet') {
+    response = `Your wallet address:\n${user.walletAddress}`;
+    db.saveMessage(from, 'assistant', response);
+  } else if (intent?.action === 'get_receipts') {
+    const transfers = db.getTransfers(from, 5);
+    if (transfers.length === 0) {
+      response = "No payments yet. Send your first one!";
+    } else {
+      response = "Recent payments:\n" + transfers.map(t => {
+        const dir = t.senderPhone === from ? '→' : '←';
+        const other = t.senderPhone === from ? t.recipientPhone : t.senderPhone;
+        return `${dir} ${t.amount} ${t.token} ${other.slice(-4)} (${t.status})`;
+      }).join('\n');
+    }
+    db.saveMessage(from, 'assistant', response);
+  } else if (intent?.action === 'send_payment') {
+    const p = intent as PaymentIntent;
+    db.savePendingAction(from, 'send_payment', { recipientPhone: p.recipientPhone, amount: p.amount, token: p.token });
+  } else if (intent?.action === 'anon_send') {
+    const p = intent as AnonSendIntent;
+    db.savePendingAction(from, 'anon_send', { recipientWallet: p.recipientWallet, amount: p.amount, token: p.token });
+  } else if (intent?.action === 'deposit') {
+    const p = intent as DepositIntent;
+    db.savePendingAction(from, 'deposit', { amount: p.amount, token: p.token });
+  } else if (intent?.action === 'withdraw') {
+    const p = intent as WithdrawIntent;
+    db.savePendingAction(from, 'withdraw', { amount: p.amount, token: p.token });
+  }
 
-  // Screen addresses
+  return response;
+}
+
+async function executePendingAction(phone: string, pending: { action: string; data: any }, channel: 'sms' | 'whatsapp'): Promise<string> {
+  const user = db.getUser(phone);
+  if (!user) return 'Error: User not found';
+
+  db.clearPendingAction(phone);
+
+  if (pending.action === 'send_payment') {
+    return await executeSendPayment(phone, user, pending.data, channel);
+  } else if (pending.action === 'anon_send') {
+    return await executeAnonSend(user, pending.data);
+  } else if (pending.action === 'deposit') {
+    return await executeDeposit(user, pending.data);
+  } else if (pending.action === 'withdraw') {
+    return await executeWithdraw(user, pending.data);
+  }
+
+  return 'Unknown action';
+}
+
+async function executeSendPayment(senderPhone: string, sender: any, data: { recipientPhone: string; amount: number; token: string }, channel: 'sms' | 'whatsapp'): Promise<string> {
+  const { user: recipient } = await getOrCreateUser(data.recipientPhone);
+
   const senderScreen = await screenAddress(sender.walletAddress);
   const recipientScreen = await screenAddress(recipient.walletAddress);
-
   if (!senderScreen.allowed) return `Transfer blocked: ${senderScreen.reason}`;
   if (!recipientScreen.allowed) return `Transfer blocked: ${recipientScreen.reason}`;
 
-  // Create transfer record
-  const transferId = db.createTransfer(senderPhone, pending.recipientPhone, pending.amount, pending.token);
-
-  // Execute private transfer
+  const transferId = db.createTransfer(senderPhone, data.recipientPhone, data.amount, data.token);
   const keypair = getKeypair(sender);
-  const result = await privateTransfer(keypair, recipient.walletAddress, pending.amount, pending.token);
+  const result = await privateTransfer(keypair, recipient.walletAddress, data.amount, data.token);
 
   if (result.success) {
     db.updateTransfer(transferId, 'confirmed', result.txSignature);
-
-    // Notify recipient
     try {
-      await sendSms(pending.recipientPhone, `You received ${pending.amount} ${pending.token} from ${senderPhone.slice(-4)}! 🎉\n\nText "balance" to check.`);
+      const notify = channel === 'whatsapp' ? sendWhatsApp : sendSms;
+      await notify(data.recipientPhone, `💰 You received ${data.amount} ${data.token}!\nFrom: ${senderPhone.slice(-4)}\n\nText "balance" to check.`);
     } catch {}
-
-    return `✓ Sent ${pending.amount} ${pending.token} to ${pending.recipientPhone}\n\nTx: ${result.txSignature?.slice(0, 16)}...`;
+    return `✓ Sent ${data.amount} ${data.token} to ${data.recipientPhone}\nAmount: [PRIVATE]\nTx: ${result.txSignature?.slice(0, 16)}...`;
   } else {
     db.updateTransfer(transferId, 'failed');
-    console.error('Transfer failed:', result.error);
-    return `Transfer failed: ${result.error}`;
     return `Transfer failed: ${result.error}`;
   }
 }
 
-// Helius webhook for tx confirmations
+async function executeAnonSend(user: any, data: { recipientWallet: string; amount: number; token: string }): Promise<string> {
+  const result = await anonymousSend(user.encryptedPrivateKey, data.amount, data.recipientWallet, data.token);
+
+  if (result.success) {
+    return `✓ Sent ${data.amount} ${data.token} anonymously\nSender: [UNTRACEABLE]\nTx: ${result.txSignature?.slice(0, 16)}...`;
+  } else {
+    return `Anonymous send failed: ${result.error}`;
+  }
+}
+
+async function executeDeposit(user: any, data: { amount: number; token: string }): Promise<string> {
+  const result = await depositToPrivate(user.encryptedPrivateKey, data.amount, data.token);
+
+  if (result.success) {
+    const newBalance = await getPrivateBalance(user.encryptedPrivateKey, data.token);
+    return `✓ Deposited ${data.amount} ${data.token} to private pool\nPrivate balance: ${newBalance.toFixed(4)} ${data.token}`;
+  } else {
+    return `Deposit failed: ${result.error}`;
+  }
+}
+
+async function executeWithdraw(user: any, data: { amount: number; token: string }): Promise<string> {
+  const { withdrawFromPrivate } = await import('./services/privacycash');
+  const result = await withdrawFromPrivate(user.encryptedPrivateKey, data.amount, user.walletAddress, data.token);
+
+  if (result.success) {
+    return `✓ Withdrew ${data.amount} ${data.token} to public wallet\nTx: ${result.txSignature?.slice(0, 16)}...`;
+  } else {
+    return `Withdraw failed: ${result.error}`;
+  }
+}
+
+// SMS webhook
+app.post('/sms', async (req, res) => {
+  const from = req.body.From;
+  const body = req.body.Body?.trim() || '';
+  console.log(`SMS from ${from}: ${body}`);
+
+  try {
+    const response = await handleMessage(from, body, 'sms');
+    res.type('text/xml').send(`<Response><Message>${response}</Message></Response>`);
+  } catch (err) {
+    console.error('SMS Error:', err);
+    res.type('text/xml').send(`<Response><Message>Something went wrong. Try again.</Message></Response>`);
+  }
+});
+
+// WhatsApp webhook
+app.post('/whatsapp', async (req, res) => {
+  const from = req.body.From?.replace('whatsapp:', '') || '';
+  const body = req.body.Body?.trim() || '';
+  console.log(`WhatsApp from ${from}: ${body}`);
+
+  // Send immediate empty response, then process async
+  res.sendStatus(200);
+
+  try {
+    await sendTypingIndicator(from);
+    const response = await handleMessage(from, body, 'whatsapp');
+    await sendWhatsApp(from, response);
+  } catch (err) {
+    console.error('WhatsApp Error:', err);
+    await sendWhatsApp(from, 'Something went wrong. Try again.');
+  }
+});
+
+// Helius webhook
 app.post('/webhook/helius', async (req, res) => {
-  const events = req.body;
-  for (const event of Array.isArray(events) ? events : [events]) {
-    console.log('Helius webhook:', event.type, event.signature);
-    // TODO: Update transfer status and notify users
+  try {
+    const events = Array.isArray(req.body) ? req.body : [req.body];
+    for (const event of events) {
+      if (event.type === 'TRANSFER' && event.nativeTransfers?.length) {
+        for (const transfer of event.nativeTransfers) {
+          const user = db.getUserByWallet(transfer.toUserAccount);
+          if (user) {
+            const amount = (transfer.amount / 1e9).toFixed(4);
+            try { await sendWhatsApp(user.phone, `💰 You received ${amount} SOL!\n\nText "balance" to check.`); } catch {}
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Helius webhook error:', err);
   }
   res.sendStatus(200);
 });
 
-// Health check
-app.get('/', (req, res) => res.send('HushPay SMS Bot Running'));
+app.get('/', (req, res) => res.send('HushPay Running'));
 
 app.listen(config.server.port, () => {
   console.log(`HushPay running on port ${config.server.port}`);

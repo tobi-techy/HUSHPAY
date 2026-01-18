@@ -7,6 +7,7 @@ export const config = {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
     authToken: process.env.TWILIO_AUTH_TOKEN || '',
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || '',
+    whatsappNumber: process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886',
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
@@ -30,7 +31,8 @@ export const config = {
     key: process.env.ENCRYPTION_KEY || 'default_key_change_in_production',
   },
   server: {
-    port: parseInt(process.env.PORT || '3000'),
+    port: parseInt(process.env.PORT || '8000'),
     nodeEnv: process.env.NODE_ENV || 'development',
+    baseUrl: process.env.BASE_URL || 'http://localhost:8000',
   },
 };

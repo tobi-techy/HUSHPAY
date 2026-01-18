@@ -25,12 +25,6 @@ export interface Message {
   createdAt: string;
 }
 
-export interface SmsMessage {
-  from: string;
-  body: string;
-  messageSid: string;
-}
-
 export interface PaymentIntent {
   action: 'send_payment';
   amount: number;
@@ -38,20 +32,39 @@ export interface PaymentIntent {
   recipientPhone: string;
 }
 
+export interface AnonSendIntent {
+  action: 'anon_send';
+  amount: number;
+  token: string;
+  recipientWallet: string;
+}
+
+export interface DepositIntent {
+  action: 'deposit';
+  amount: number;
+  token: string;
+}
+
+export interface WithdrawIntent {
+  action: 'withdraw';
+  amount: number;
+  token: string;
+}
+
 export interface BalanceIntent {
   action: 'check_balance';
+}
+
+export interface WalletIntent {
+  action: 'get_wallet';
 }
 
 export interface ReceiptIntent {
   action: 'get_receipts';
 }
 
-export interface HelpIntent {
-  action: 'help';
-}
-
 export interface ChatIntent {
   action: 'chat';
 }
 
-export type Intent = PaymentIntent | BalanceIntent | ReceiptIntent | HelpIntent | ChatIntent;
+export type Intent = PaymentIntent | AnonSendIntent | DepositIntent | WithdrawIntent | BalanceIntent | WalletIntent | ReceiptIntent | ChatIntent;

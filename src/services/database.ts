@@ -50,6 +50,15 @@ class DatabaseService {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS pending_actions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT UNIQUE NOT NULL,
+        action TEXT NOT NULL,
+        data TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_messages_phone ON messages(phone);
       CREATE INDEX IF NOT EXISTS idx_pending_phone ON pending_transfers(phone);
     `);
@@ -58,6 +67,18 @@ class DatabaseService {
   // User methods
   getUser(phone: string): User | undefined {
     const row = this.db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as any;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      phone: row.phone,
+      walletAddress: row.wallet_address,
+      encryptedPrivateKey: row.encrypted_private_key,
+      createdAt: row.created_at,
+    };
+  }
+
+  getUserByWallet(walletAddress: string): User | undefined {
+    const row = this.db.prepare('SELECT * FROM users WHERE wallet_address = ?').get(walletAddress) as any;
     if (!row) return undefined;
     return {
       id: row.id,
@@ -131,6 +152,24 @@ class DatabaseService {
     this.db.prepare('DELETE FROM pending_transfers WHERE id = ?').run(row.id);
     return { recipientPhone: row.recipient_phone, amount: row.amount, token: row.token };
   }
+
+  // Pending action methods (for deposit/withdraw/anon_send)
+  savePendingAction(phone: string, action: string, data: any) {
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    this.db.prepare('DELETE FROM pending_actions WHERE phone = ?').run(phone);
+    this.db.prepare('INSERT INTO pending_actions (phone, action, data, expires_at) VALUES (?, ?, ?, ?)').run(phone, action, JSON.stringify(data), expiresAt);
+  }
+
+  getPendingAction(phone: string): { action: string; data: any } | null {
+    const row = this.db.prepare('SELECT * FROM pending_actions WHERE phone = ? AND expires_at > ?').get(phone, new Date().toISOString()) as any;
+    if (!row) return null;
+    return { action: row.action, data: JSON.parse(row.data) };
+  }
+
+  clearPendingAction(phone: string) {
+    this.db.prepare('DELETE FROM pending_actions WHERE phone = ?').run(phone);
+  }
 }
+
 
 export const db = new DatabaseService();

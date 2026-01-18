@@ -2,6 +2,7 @@ import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.j
 import { getAssociatedTokenAddress, getAccount } from '@solana/spl-token';
 import { config } from '../config';
 import { db } from './database';
+import { registerWalletForNotifications } from './helius';
 import type { User } from '../types';
 import bs58 from 'bs58';
 
@@ -16,6 +17,10 @@ export async function getOrCreateUser(phone: string): Promise<{ user: User; isNe
   const privateKey = bs58.encode(keypair.secretKey);
 
   const user = db.createUser(phone, walletAddress, privateKey);
+  
+  // Register wallet for notifications
+  registerWalletForNotifications(walletAddress).catch(() => {});
+  
   return { user, isNew: true };
 }
 

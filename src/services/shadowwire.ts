@@ -1,11 +1,16 @@
-import axios from 'axios';
-import { config } from '../config';
+import { ShadowWireClient, RecipientNotFoundError, InsufficientBalanceError } from '@radr/shadowwire';
 import { Keypair, Connection, PublicKey, Transaction, SystemProgram, sendAndConfirmTransaction } from '@solana/web3.js';
+import { config } from '../config';
+
+type SupportedToken = 'SOL' | 'RADR' | 'USDC' | 'ORE' | 'BONK' | 'JIM' | 'GODL' | 'HUSTLE' | 'ZEC' | 'CRT' | 'BLACKCOIN' | 'GIL' | 'ANON' | 'WLFI' | 'USD1' | 'AOL' | 'IQLABS';
+
+const client = new ShadowWireClient({ debug: config.server.nodeEnv === 'development' });
 
 interface TransferResult {
   success: boolean;
   txSignature?: string;
   error?: string;
+  amountHidden?: boolean;
 }
 
 export async function privateTransfer(
@@ -14,50 +19,76 @@ export async function privateTransfer(
   amount: number,
   token: string
 ): Promise<TransferResult> {
-  console.log('privateTransfer called:', { recipientAddress, amount, token, hasShadowwireKey: !!config.shadowwire.apiKey });
+  const senderWallet = senderKeypair.publicKey.toBase58();
+  const tokenUpper = token.toUpperCase() as SupportedToken;
 
-  // Use regular Solana transfer for SOL on devnet
-  if (token.toUpperCase() === 'SOL' && config.solana.rpcUrl.includes('devnet')) {
-    try {
-      const connection = new Connection(config.solana.rpcUrl);
-      const tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: senderKeypair.publicKey,
-          toPubkey: new PublicKey(recipientAddress),
-          lamports: Math.floor(amount * 1e9),
-        })
-      );
-      const sig = await sendAndConfirmTransaction(connection, tx, [senderKeypair]);
-      return { success: true, txSignature: sig };
-    } catch (err: any) {
-      console.error('SOL transfer error:', err);
-      return { success: false, error: err.message || String(err) };
-    }
-  }
-
-  if (!config.shadowwire.apiKey) {
-    return { success: false, error: 'ShadowWire not configured' };
+  // For devnet SOL, use regular transfer
+  if (config.solana.rpcUrl.includes('devnet') && tokenUpper === 'SOL') {
+    return devnetTransfer(senderKeypair, recipientAddress, amount);
   }
 
   try {
-    const response = await axios.post(
-      `${config.shadowwire.apiUrl}/v1/transfer`,
-      {
-        sender: senderKeypair.publicKey.toBase58(),
-        recipient: recipientAddress,
-        amount,
-        token,
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${config.shadowwire.apiKey}`,
-          'Content-Type': 'application/json',
-        },
+    const result = await client.transfer({
+      sender: senderWallet,
+      recipient: recipientAddress,
+      amount,
+      token: tokenUpper,
+      type: 'internal',
+      wallet: {
+        signMessage: async (message: Uint8Array) => {
+          const nacl = await import('tweetnacl');
+          return nacl.sign.detached(message, senderKeypair.secretKey);
+        }
       }
-    );
+    });
 
-    return { success: true, txSignature: response.data.signature };
+    return {
+      success: true,
+      txSignature: result.tx_signature,
+      amountHidden: result.amount_hidden,
+    };
   } catch (err: any) {
-    return { success: false, error: err.response?.data?.message || 'Transfer failed' };
+    if (err instanceof RecipientNotFoundError) {
+      try {
+        const result = await client.transfer({
+          sender: senderWallet,
+          recipient: recipientAddress,
+          amount,
+          token: tokenUpper,
+          type: 'external',
+          wallet: {
+            signMessage: async (message: Uint8Array) => {
+              const nacl = await import('tweetnacl');
+              return nacl.sign.detached(message, senderKeypair.secretKey);
+            }
+          }
+        });
+        return { success: true, txSignature: result.tx_signature, amountHidden: false };
+      } catch (extErr: any) {
+        return { success: false, error: extErr.message };
+      }
+    }
+    if (err instanceof InsufficientBalanceError) {
+      return { success: false, error: 'Insufficient balance' };
+    }
+    return { success: false, error: err.message };
+  }
+}
+
+async function devnetTransfer(senderKeypair: Keypair, recipientAddress: string, amount: number): Promise<TransferResult> {
+  try {
+    const connection = new Connection(config.solana.rpcUrl);
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: senderKeypair.publicKey,
+        toPubkey: new PublicKey(recipientAddress),
+        lamports: Math.floor(amount * 1e9),
+      })
+    );
+    const sig = await sendAndConfirmTransaction(connection, tx, [senderKeypair]);
+    return { success: true, txSignature: sig, amountHidden: false };
+  } catch (err: any) {
+    console.error('Devnet transfer error:', err);
+    return { success: false, error: err.message };
   }
 }
