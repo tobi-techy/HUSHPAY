@@ -22,29 +22,55 @@ import {
 
 const PixelPhoneDemo = () => {
   const [messages, setMessages] = useState([
-    { text: "send 50 usd1 to +234...", sender: "user", delay: 1000 },
+    { text: "send 50 usd1 to +234...", sender: "user" },
   ]);
+  const [currentInput, setCurrentInput] = useState("");
 
   useEffect(() => {
-    const sequence = [
-      { text: "Verifying encrypted balance...", sender: "system", delay: 2000 },
-      { text: "✓ Sent! Amount hidden on-chain.", sender: "bot", delay: 3500 },
-      { text: "split 100 sol with +234...", sender: "user", delay: 5500 },
-      { text: "Created split request.", sender: "bot", delay: 7000 }
-    ];
+    let isMounted = true;
+    const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    let timeouts: ReturnType<typeof setTimeout>[] = [];
-    let accumulatedDelay = 0;
+    const runSequence = async () => {
+      // Initial delay after first message
+      await wait(2000);
+      if (!isMounted) return;
 
-    sequence.forEach(msg => {
-      accumulatedDelay += msg.delay - (sequence[sequence.indexOf(msg) - 1]?.delay || 1000);
-      const timeout = setTimeout(() => {
-        setMessages(prev => [...prev, msg]);
-      }, accumulatedDelay + 1000);
-      timeouts.push(timeout);
-    });
+      // System message
+      setMessages(prev => [...prev, { text: "Verifying encrypted balance...", sender: "system" }]);
+      
+      await wait(1500);
+      if (!isMounted) return;
 
-    return () => timeouts.forEach(clearTimeout);
+      // Bot success message
+      setMessages(prev => [...prev, { text: "✓ Sent! Amount hidden on-chain.", sender: "bot" }]);
+      
+      await wait(1000);
+      if (!isMounted) return;
+
+      // Type out user command
+      const cmd = "split 100 sol with +234...";
+      for (let i = 0; i <= cmd.length; i++) {
+        if (!isMounted) return;
+        setCurrentInput(cmd.substring(0, i));
+        await wait(Math.random() * 50 + 50); // typing speed
+      }
+
+      await wait(500);
+      if (!isMounted) return;
+
+      // Send user message
+      setCurrentInput("");
+      setMessages(prev => [...prev, { text: cmd, sender: "user" }]);
+
+      await wait(1500);
+      if (!isMounted) return;
+
+      // Bot response
+      setMessages(prev => [...prev, { text: "Created split request.", sender: "bot" }]);
+    };
+
+    runSequence();
+    return () => { isMounted = false; };
   }, []);
 
   return (
@@ -73,7 +99,7 @@ const PixelPhoneDemo = () => {
       </div>
 
       {/* Chat Area */}
-      <div className="p-4 space-y-4 h-[380px] bg-black overflow-y-auto custom-scrollbar relative">
+      <div className="p-4 space-y-4 h-[380px] bg-black overflow-y-auto relative flex flex-col custom-scrollbar">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#22c55e_1px,transparent_1px)] [background-size:8px_8px] pointer-events-none"></div>
         
         {messages.map((msg, idx) => (
@@ -96,8 +122,9 @@ const PixelPhoneDemo = () => {
       {/* Input Placeholder */}
       <div className="absolute bottom-0 w-full bg-gray-900 p-3 border-t-2 border-gray-600">
         <div className="flex gap-2">
-            <div className="flex-1 h-8 border-b-2 border-green-500 bg-black text-green-500 px-2 flex items-center">
-                <span className="animate-pulse">|</span>
+            <div className="flex-1 h-8 border-b-2 border-green-500 bg-black text-green-500 px-2 flex items-center font-mono text-sm overflow-hidden whitespace-nowrap">
+                {currentInput}
+                <span className="animate-pulse bg-green-500 text-black px-0.5 ml-0.5 block w-2 h-4"></span>
             </div>
             <div className="w-8 h-8 border-2 border-green-500 bg-green-900 flex items-center justify-center">
                 <ArrowRight size={16} className="text-green-400" />
@@ -109,8 +136,21 @@ const PixelPhoneDemo = () => {
 };
 
 export default function App() {
+  // Add a flicker state to simulate occasional CRT glitch
+  const [flicker, setFlicker] = useState(1);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+       if (Math.random() > 0.95) {
+           setFlicker(0.98);
+           setTimeout(() => setFlicker(1), 50);
+       }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-black text-white overflow-x-hidden scanlines selection:bg-green-500 selection:text-black">
+    <div className="min-h-screen bg-black text-white overflow-x-hidden scanlines selection:bg-green-500 selection:text-black" style={{opacity: flicker}}>
       <BackgroundParticles />
       
       {/* Navbar */}
