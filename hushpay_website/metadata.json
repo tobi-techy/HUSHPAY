@@ -1,0 +1,5 @@
+{
+  "name": "HushPay",
+  "description": "Quiet money moves. Private crypto payments via WhatsApp. No wallet addresses. No public amounts.",
+  "requestFramePermissions": []
+}
