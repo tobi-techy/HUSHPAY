@@ -1,5 +1,5 @@
 import { db } from './database';
-import { getKeypair } from './wallet';
+import { getKeypair, getOrCreateUser } from './wallet';
 import { privateTransfer } from './shadowwire';
 import { sendWhatsApp } from './twilio';
 
@@ -14,8 +14,7 @@ export function startRecurringPaymentProcessor() {
           const user = db.getUser(payment.sender_phone);
           if (!user) continue;
 
-          const recipient = db.getUser(payment.recipient_phone);
-          if (!recipient) continue;
+          const { user: recipient } = await getOrCreateUser(payment.recipient_phone);
 
           const keypair = getKeypair(user);
           const result = await privateTransfer(

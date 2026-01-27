@@ -335,7 +335,10 @@ export async function executeCrossChainSwap(
   }
 
   let depositTxHash = '0x';
-  while (true) {
+  const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < TIMEOUT_MS) {
     const status = await getRelayStatus(requestId);
 
     if (status.status === 'success') {
@@ -348,6 +351,10 @@ export async function executeCrossChainSwap(
     }
 
     await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  if (depositTxHash === '0x') {
+    throw new Error('Cross-chain transfer timed out after 10 minutes');
   }
 
   return {

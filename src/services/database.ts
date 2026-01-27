@@ -74,7 +74,31 @@ class DatabaseService {
 
       CREATE INDEX IF NOT EXISTS idx_messages_phone ON messages(phone);
       CREATE INDEX IF NOT EXISTS idx_pending_phone ON pending_transfers(phone);
+
+      CREATE TABLE IF NOT EXISTS price_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT NOT NULL,
+        token TEXT NOT NULL,
+        target_price REAL NOT NULL,
+        condition TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(phone, token)
+      );
+
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_phone ON audit_logs(phone);
     `);
+  }
+
+  // Audit logging
+  audit(phone: string, action: string, details?: Record<string, any>) {
+    this.db.prepare('INSERT INTO audit_logs (phone, action, details) VALUES (?, ?, ?)').run(phone, action, details ? JSON.stringify(details) : null);
   }
 
   // User methods
@@ -212,6 +236,23 @@ class DatabaseService {
     return this.db.prepare('SELECT * FROM recurring_payments WHERE sender_phone = ? AND active = 1').all(phone) as any[];
   }
 
+  // Price alert methods
+  addPriceAlert(phone: string, token: string, targetPrice: number, condition: 'above' | 'below') {
+    this.db.prepare('INSERT OR REPLACE INTO price_alerts (phone, token, target_price, condition) VALUES (?, ?, ?, ?)').run(phone, token.toUpperCase(), targetPrice, condition);
+  }
+
+  removePriceAlert(phone: string, token: string) {
+    this.db.prepare('DELETE FROM price_alerts WHERE phone = ? AND token = ?').run(phone, token.toUpperCase());
+  }
+
+  getPriceAlerts(phone: string): { phone: string; token: string; targetPrice: number; condition: 'above' | 'below' }[] {
+    return this.db.prepare('SELECT phone, token, target_price as targetPrice, condition FROM price_alerts WHERE phone = ?').all(phone) as any[];
+  }
+
+  getAllPriceAlerts(): { phone: string; token: string; targetPrice: number; condition: 'above' | 'below' }[] {
+    return this.db.prepare('SELECT phone, token, target_price as targetPrice, condition FROM price_alerts').all() as any[];
+  }
+
   // Failed action methods (for retry)
   saveFailedAction(phone: string, action: string, data: any, error: string) {
     this.db.exec(`CREATE TABLE IF NOT EXISTS failed_actions (
@@ -242,6 +283,7 @@ class DatabaseService {
   setUserPin(phone: string, pinHash: string) {
     try { this.db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT`); } catch {}
     this.db.prepare('UPDATE users SET pin_hash = ? WHERE phone = ?').run(pinHash, phone);
+    this.clearPinFailures(phone);
   }
 
   getUserPinHash(phone: string): string | null {
@@ -249,6 +291,34 @@ class DatabaseService {
       const row = this.db.prepare('SELECT pin_hash FROM users WHERE phone = ?').get(phone) as any;
       return row?.pin_hash || null;
     } catch { return null; }
+  }
+
+  // PIN lockout
+  getPinLockout(phone: string): Date | null {
+    try {
+      this.db.exec(`ALTER TABLE users ADD COLUMN pin_lockout_until TEXT`);
+      this.db.exec(`ALTER TABLE users ADD COLUMN pin_failures INTEGER DEFAULT 0`);
+    } catch {}
+    const row = this.db.prepare('SELECT pin_lockout_until FROM users WHERE phone = ?').get(phone) as any;
+    return row?.pin_lockout_until ? new Date(row.pin_lockout_until) : null;
+  }
+
+  incrementPinFailures(phone: string): number {
+    try { this.db.exec(`ALTER TABLE users ADD COLUMN pin_failures INTEGER DEFAULT 0`); } catch {}
+    this.db.prepare('UPDATE users SET pin_failures = COALESCE(pin_failures, 0) + 1 WHERE phone = ?').run(phone);
+    const row = this.db.prepare('SELECT pin_failures FROM users WHERE phone = ?').get(phone) as any;
+    const failures = row?.pin_failures || 0;
+    if (failures >= 5) {
+      const lockoutUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      this.db.prepare('UPDATE users SET pin_lockout_until = ? WHERE phone = ?').run(lockoutUntil, phone);
+    }
+    return failures;
+  }
+
+  clearPinFailures(phone: string) {
+    try {
+      this.db.prepare('UPDATE users SET pin_failures = 0, pin_lockout_until = NULL WHERE phone = ?').run(phone);
+    } catch {}
   }
 
   hasPin(phone: string): boolean {
@@ -366,6 +436,10 @@ class DatabaseService {
         break;
     }
     return now.toISOString();
+  }
+
+  close() {
+    this.db.close();
   }
 }
 

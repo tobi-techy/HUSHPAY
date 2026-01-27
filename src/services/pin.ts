@@ -8,10 +8,25 @@ export function hashPin(pin: string): string {
   return crypto.SHA256(pin + config.encryption.key).toString();
 }
 
+export function isLockedOut(phone: string): { locked: boolean; minutesLeft?: number } {
+  const lockout = db.getPinLockout(phone);
+  if (!lockout) return { locked: false };
+  const now = new Date();
+  if (lockout > now) {
+    return { locked: true, minutesLeft: Math.ceil((lockout.getTime() - now.getTime()) / 60000) };
+  }
+  return { locked: false };
+}
+
 export function verifyPin(phone: string, pin: string): boolean {
   const stored = db.getUserPinHash(phone);
   if (!stored) return false;
-  return stored === hashPin(pin);
+  if (stored === hashPin(pin)) {
+    db.clearPinFailures(phone);
+    return true;
+  }
+  db.incrementPinFailures(phone);
+  return false;
 }
 
 export function setPin(phone: string, pin: string): boolean {
@@ -34,14 +49,18 @@ export function validateConfirmation(token: string, pin: string): { valid: boole
   const confirmation = db.getPinConfirmation(token);
   if (!confirmation) return { valid: false, error: 'Link expired or invalid' };
   
-  const attempts = db.incrementPinAttempts(token);
-  if (attempts > 3) {
-    db.deletePinConfirmation(token);
-    return { valid: false, error: 'Too many attempts. Request a new link.' };
+  const lockout = isLockedOut(confirmation.phone);
+  if (lockout.locked) {
+    return { valid: false, error: `Account locked. Try again in ${lockout.minutesLeft} minutes.` };
   }
 
   if (!verifyPin(confirmation.phone, pin)) {
-    return { valid: false, error: `Wrong PIN. ${3 - attempts} attempts left.` };
+    const newLockout = isLockedOut(confirmation.phone);
+    if (newLockout.locked) {
+      db.deletePinConfirmation(token);
+      return { valid: false, error: `Too many failed attempts. Account locked for ${newLockout.minutesLeft} minutes.` };
+    }
+    return { valid: false, error: 'Wrong PIN. Try again.' };
   }
 
   db.deletePinConfirmation(token);

@@ -67,13 +67,25 @@ INTENTS (extract from natural conversation):
 14. RECURRING PAYMENT:
     {"reply": "Set up weekly payment of 10 SOL to Mom?\\n\\nReply YES to confirm.", "intent": {"action": "recurring_payment", "amount": 10, "token": "SOL", "recipientPhone": "+234...", "frequency": "weekly"}}
 
-15. CROSS-CHAIN:
+15. LIST RECURRING PAYMENTS:
+    Triggers: "my recurring", "scheduled payments", "show recurring", "list recurring"
+    {"reply": "", "intent": {"action": "list_recurring"}}
+
+16. CANCEL RECURRING PAYMENT:
+    Triggers: "cancel recurring to +234...", "stop recurring to mom", "cancel scheduled payment"
+    {"reply": "", "intent": {"action": "cancel_recurring", "recipientPhone": "+234..."}}
+
+17. DELETE CONTACT:
+    Triggers: "delete contact mom", "remove contact", "forget mom"
+    {"reply": "", "intent": {"action": "delete_contact", "name": "mom"}}
+
+18. CROSS-CHAIN:
     {"reply": "Send 1 SOL to +234... on Ethereum? Private bridge activated 🌉\\n\\nReply YES to confirm.", "intent": {"action": "cross_chain_send", "amount": 1, "token": "SOL", "recipientPhone": "+234...", "destinationChain": "ethereum", "recipientEvmAddress": "0x..."}}
 
-16. SET LANGUAGE:
+19. SET LANGUAGE:
     {"reply": "¡Cambiado a español! 🇪🇸", "intent": {"action": "set_language", "language": "es"}}
 
-17. HELP:
+20. HELP:
     {"reply": "Here's what I can do:\\n\\n💸 *Payments*\\n• Send to phone or saved contact\\n• Send anonymously\\n• Split bills\\n• Request money\\n\\n🔐 *Security*\\n• Set PIN\\n• View balance\\n\\n📇 *Contacts*\\n• Save contact\\n• List contacts\\n\\nJust tell me what you need!", "intent": {"action": "help"}}
 
 RULES:
@@ -100,7 +112,13 @@ export async function chat(phone: string, userMessage: string, preferredLanguage
 
   const result = await model.generateContent(prompt);
   const text = result.response.text().replace(/```json\n?|\n?```/g, '').trim();
-  const parsed = JSON.parse(text);
+  
+  let parsed: { reply: string; intent: any };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = { reply: "I didn't quite understand that. Could you rephrase?", intent: null };
+  }
 
   if (parsed.reply) db.saveMessage(phone, 'assistant', parsed.reply);
 

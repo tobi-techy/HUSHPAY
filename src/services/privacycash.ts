@@ -20,7 +20,7 @@ function getClient(encryptedPrivateKey: string): PrivacyCash {
   return new PrivacyCash({
     RPC_url: config.solana.rpcUrl,
     owner: keypair,
-    enableDebug: true,
+    enableDebug: config.server.nodeEnv === 'development',
   });
 }
 

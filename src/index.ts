@@ -9,15 +9,28 @@ import { getPrivateBalance, depositToPrivate, anonymousSend } from './services/p
 import { sendSms, sendWhatsApp, sendTypingIndicator } from './services/twilio';
 import { detectLanguage, translate } from './services/i18n';
 import { sendWalletQR } from './services/qr';
-import { addPriceAlert, getPriceAlerts } from './services/priceAlerts';
+import { addPriceAlert, getPriceAlerts, initPriceAlerts } from './services/priceAlerts';
 import { generateReceipt } from './services/receipt';
 import { startRecurringPaymentProcessor } from './services/recurringPayments';
 import { setPin, requiresPin, createConfirmationLink } from './services/pin';
-import type { PaymentIntent, AnonSendIntent, DepositIntent, WithdrawIntent, PriceAlertIntent, SetLanguageIntent, CrossChainSendIntent, SplitPaymentIntent, PaymentRequestIntent, RecurringPaymentIntent } from './types';
+import type { PaymentIntent, AnonSendIntent, DepositIntent, WithdrawIntent, PriceAlertIntent, SetLanguageIntent, CrossChainSendIntent, SplitPaymentIntent, PaymentRequestIntent, RecurringPaymentIntent, CancelRecurringIntent, DeleteContactIntent } from './types';
 
 const app = express();
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+// Rate limiter: 10 requests per minute per phone
+const rateLimitMap = new Map<string, number[]>();
+function isRateLimited(phone: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 10;
+  const timestamps = rateLimitMap.get(phone)?.filter(t => now - t < windowMs) || [];
+  if (timestamps.length >= maxRequests) return true;
+  timestamps.push(now);
+  rateLimitMap.set(phone, timestamps);
+  return false;
+}
 
 const WELCOME_MSG = `Welcome to HushPay! 🤫
 
@@ -198,6 +211,24 @@ async function handleMessage(from: string, body: string, channel: 'sms' | 'whats
       token: p.token,
       frequency: p.frequency
     });
+  } else if (intent?.action === 'list_recurring') {
+    const payments = db.getActiveRecurringPayments(from);
+    if (payments.length === 0) {
+      response = "You don't have any recurring payments set up.\n\nTry: \"send 10 sol to +234... every week\"";
+    } else {
+      response = "📅 *Your Recurring Payments*\n\n" + payments.map((p: any) => 
+        `• ${p.amount} ${p.token} → ${p.recipient_phone.slice(-4)}\n  ${p.frequency} (next: ${new Date(p.next_run).toLocaleDateString()})`
+      ).join('\n\n');
+    }
+  } else if (intent?.action === 'cancel_recurring') {
+    const p = intent as CancelRecurringIntent;
+    db.cancelRecurringPayment(from, p.recipientPhone);
+    db.audit(from, 'recurring_cancel', { to: p.recipientPhone });
+    response = `✓ Cancelled recurring payment to ${p.recipientPhone.slice(-4)}`;
+  } else if (intent?.action === 'delete_contact') {
+    const p = intent as DeleteContactIntent;
+    db.deleteContact(from, p.name);
+    response = `✓ Deleted contact "${p.name}"`;
   }
 
   console.log(`[handleMessage] Returning response (${response?.length} chars)`);
@@ -224,6 +255,7 @@ async function executePendingAction(phone: string, pending: { action: string; da
     return await executeSplitPayment(phone, user, pending.data, channel);
   } else if (pending.action === 'recurring_payment') {
     db.createRecurringPayment(phone, pending.data.recipientPhone, pending.data.amount, pending.data.token, pending.data.frequency);
+    db.audit(phone, 'recurring_setup', { to: pending.data.recipientPhone, amount: pending.data.amount, token: pending.data.token, frequency: pending.data.frequency });
     return `✓ Recurring payment set up!\n\n${pending.data.amount} ${pending.data.token} → ${pending.data.recipientPhone.slice(-4)}\nFrequency: ${pending.data.frequency}\n\nFirst payment will be sent now.`;
   }
 
@@ -289,6 +321,7 @@ async function executeSendPayment(senderPhone: string, sender: any, data: { reci
       await notify(data.recipientPhone, `💰 You received ${data.amount} ${data.token}!\nFrom: ${senderPhone.slice(-4)}\n\nText "balance" to check.`);
     } catch {}
     
+    db.audit(senderPhone, 'transfer', { to: data.recipientPhone, amount: data.amount, token: data.token, tx: result.txSignature });
     return `✓ Sent ${data.amount} ${data.token} to ${data.recipientPhone}\nAmount: [PRIVATE]\nTx: ${result.txSignature?.slice(0, 16)}...`;
   } else {
     db.updateTransfer(transferId, 'failed');
@@ -302,6 +335,7 @@ async function executeAnonSend(user: any, data: { recipientWallet: string; amoun
   const result = await anonymousSend(user.encryptedPrivateKey, data.amount, data.recipientWallet, data.token);
 
   if (result.success) {
+    db.audit(user.phone, 'anon_transfer', { to: data.recipientWallet, amount: data.amount, token: data.token });
     return `✓ Sent ${data.amount} ${data.token} anonymously\nSender: [UNTRACEABLE]\nTx: ${result.txSignature?.slice(0, 16)}...`;
   } else {
     return `Anonymous send failed: ${result.error}`;
@@ -383,6 +417,7 @@ async function executeDeposit(user: any, data: { amount: number; token: string }
 
   if (result.success) {
     const newBalance = await getPrivateBalance(user.encryptedPrivateKey, data.token);
+    db.audit(user.phone, 'deposit', { amount: data.amount, token: data.token });
     return `✓ Deposited ${data.amount} ${data.token} to private pool\nPrivate balance: ${newBalance.toFixed(4)} ${data.token}`;
   } else {
     return `Deposit failed: ${result.error}`;
@@ -394,6 +429,7 @@ async function executeWithdraw(user: any, data: { amount: number; token: string 
   const result = await withdrawFromPrivate(user.encryptedPrivateKey, data.amount, user.walletAddress, data.token);
 
   if (result.success) {
+    db.audit(user.phone, 'withdraw', { amount: data.amount, token: data.token });
     return `✓ Withdrew ${data.amount} ${data.token} to public wallet\nTx: ${result.txSignature?.slice(0, 16)}...`;
   } else {
     return `Withdraw failed: ${result.error}`;
@@ -405,6 +441,10 @@ app.post('/sms', async (req, res) => {
   const from = req.body.From;
   const body = req.body.Body?.trim() || '';
   console.log(`SMS from ${from}: ${body}`);
+
+  if (isRateLimited(from)) {
+    return res.type('text/xml').send(`<Response><Message>Too many requests. Please wait a minute.</Message></Response>`);
+  }
 
   try {
     const response = await handleMessage(from, body, 'sms');
@@ -424,6 +464,11 @@ app.post('/whatsapp', async (req, res) => {
   // Send immediate empty response, then process async
   res.sendStatus(200);
 
+  if (isRateLimited(from)) {
+    await sendWhatsApp(from, 'Too many requests. Please wait a minute.');
+    return;
+  }
+
   try {
     await sendTypingIndicator(from);
     const response = await handleMessage(from, body, 'whatsapp');
@@ -438,13 +483,14 @@ app.post('/whatsapp', async (req, res) => {
 
 // Helius webhook
 app.post('/webhook/helius', async (req, res) => {
+  res.sendStatus(200);
   try {
     const events = Array.isArray(req.body) ? req.body : [req.body];
     for (const event of events) {
       if (event.type === 'TRANSFER' && event.nativeTransfers?.length) {
         for (const transfer of event.nativeTransfers) {
           const user = db.getUserByWallet(transfer.toUserAccount);
-          if (user) {
+          if (user && !isRateLimited(`helius:${user.phone}`)) {
             const amount = (transfer.amount / 1e9).toFixed(4);
             try { await sendWhatsApp(user.phone, `💰 You received ${amount} SOL!\n\nText "balance" to check.`); } catch {}
           }
@@ -507,6 +553,7 @@ app.post('/confirm/:token', async (req, res) => {
     }
     setPin(confirmation.phone, pin);
     db.deletePinConfirmation(token);
+    db.audit(confirmation.phone, confirmation.action === 'update_pin' ? 'pin_update' : 'pin_set', {});
     try { await sendWhatsApp(confirmation.phone, `✓ PIN ${confirmation.action === 'update_pin' ? 'updated' : 'set'} successfully!\n\n🔐 You'll need this PIN for payments over 0.1 SOL.`); } catch {}
     return res.send(`<html><body style="font-family:sans-serif;text-align:center;padding:50px;background:#0a0a0a;color:#fff"><h2>✅ PIN ${confirmation.action === 'update_pin' ? 'Updated' : 'Set'}!</h2><p style="color:#888">You can close this window.</p></body></html>`);
   }
@@ -543,7 +590,21 @@ app.post('/confirm/:token', async (req, res) => {
 
 app.get('/', (req, res) => res.send('HushPay Running'));
 
-app.listen(config.server.port, () => {
+const server = app.listen(config.server.port, () => {
   console.log(`HushPay running on port ${config.server.port}`);
   startRecurringPaymentProcessor();
+  initPriceAlerts();
 });
+
+// Graceful shutdown
+const shutdown = () => {
+  console.log('Shutting down gracefully...');
+  server.close(() => {
+    console.log('HTTP server closed');
+    db.close();
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000);
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

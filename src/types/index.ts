@@ -129,4 +129,18 @@ export interface HelpIntent {
   action: 'help';
 }
 
-export type Intent = PaymentIntent | AnonSendIntent | DepositIntent | WithdrawIntent | BalanceIntent | WalletIntent | ReceiptIntent | PriceAlertIntent | SetLanguageIntent | CrossChainSendIntent | SplitPaymentIntent | PaymentRequestIntent | RecurringPaymentIntent | ChatIntent | SetPinIntent | SaveContactIntent | ListContactsIntent | HelpIntent;
+export interface ListRecurringIntent {
+  action: 'list_recurring';
+}
+
+export interface CancelRecurringIntent {
+  action: 'cancel_recurring';
+  recipientPhone: string;
+}
+
+export interface DeleteContactIntent {
+  action: 'delete_contact';
+  name: string;
+}
+
+export type Intent = PaymentIntent | AnonSendIntent | DepositIntent | WithdrawIntent | BalanceIntent | WalletIntent | ReceiptIntent | PriceAlertIntent | SetLanguageIntent | CrossChainSendIntent | SplitPaymentIntent | PaymentRequestIntent | RecurringPaymentIntent | ChatIntent | SetPinIntent | SaveContactIntent | ListContactsIntent | HelpIntent | ListRecurringIntent | CancelRecurringIntent | DeleteContactIntent;
