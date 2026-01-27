@@ -3,6 +3,7 @@ export interface User {
   phone: string;
   walletAddress: string;
   encryptedPrivateKey: string;
+  preferredLanguage?: string;
   createdAt: string;
 }
 
@@ -67,4 +68,65 @@ export interface ChatIntent {
   action: 'chat';
 }
 
-export type Intent = PaymentIntent | AnonSendIntent | DepositIntent | WithdrawIntent | BalanceIntent | WalletIntent | ReceiptIntent | ChatIntent;
+export interface PriceAlertIntent {
+  action: 'price_alert';
+  token: string;
+  price: number;
+  condition: 'above' | 'below';
+}
+
+export interface SetLanguageIntent {
+  action: 'set_language';
+  language: string;
+}
+
+export interface CrossChainSendIntent {
+  action: 'cross_chain_send';
+  amount: number;
+  token: string;
+  recipientPhone: string;
+  destinationChain: 'ethereum' | 'avalanche' | 'polygon';
+  recipientEvmAddress: string;
+}
+
+export interface SplitPaymentIntent {
+  action: 'split_payment';
+  totalAmount: number;
+  token: string;
+  recipients: string[];
+}
+
+export interface PaymentRequestIntent {
+  action: 'payment_request';
+  amount: number;
+  token: string;
+  fromPhone: string;
+}
+
+export interface RecurringPaymentIntent {
+  action: 'recurring_payment';
+  amount: number;
+  token: string;
+  recipientPhone: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+}
+
+export interface SetPinIntent {
+  action: 'set_pin';
+}
+
+export interface SaveContactIntent {
+  action: 'save_contact';
+  phone: string;
+  name: string;
+}
+
+export interface ListContactsIntent {
+  action: 'list_contacts';
+}
+
+export interface HelpIntent {
+  action: 'help';
+}
+
+export type Intent = PaymentIntent | AnonSendIntent | DepositIntent | WithdrawIntent | BalanceIntent | WalletIntent | ReceiptIntent | PriceAlertIntent | SetLanguageIntent | CrossChainSendIntent | SplitPaymentIntent | PaymentRequestIntent | RecurringPaymentIntent | ChatIntent | SetPinIntent | SaveContactIntent | ListContactsIntent | HelpIntent;

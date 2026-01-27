@@ -9,14 +9,20 @@ import bs58 from 'bs58';
 const connection = new Connection(config.solana.rpcUrl);
 
 export async function getOrCreateUser(phone: string): Promise<{ user: User; isNew: boolean }> {
-  const existing = db.getUser(phone);
+  // Validate and normalize phone number
+  const normalizedPhone = phone.startsWith('+') ? phone : `+${phone}`;
+  if (!/^\+\d{10,15}$/.test(normalizedPhone)) {
+    throw new Error('Invalid phone number format');
+  }
+
+  const existing = db.getUser(normalizedPhone);
   if (existing) return { user: existing, isNew: false };
 
   const keypair = Keypair.generate();
   const walletAddress = keypair.publicKey.toBase58();
   const privateKey = bs58.encode(keypair.secretKey);
 
-  const user = db.createUser(phone, walletAddress, privateKey);
+  const user = db.createUser(normalizedPhone, walletAddress, privateKey);
   
   // Register wallet for notifications
   registerWalletForNotifications(walletAddress).catch(() => {});

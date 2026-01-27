@@ -1,259 +1,371 @@
-# HushPay
+# HushPay 🤫
 
 **Quiet money moves.**
 
-Send private Solana payments via WhatsApp. Transaction amounts hidden on-chain using zero-knowledge proofs.
+Private crypto payments via WhatsApp. No wallet addresses. No public amounts. Just send money like texting.
 
 ---
 
 ## What is HushPay?
 
-HushPay brings privacy-first crypto payments to WhatsApp's 2+ billion users. Send money to phone numbers, not wallet addresses. Amounts stay hidden on-chain using ShadowWire's Bulletproofs technology.
+HushPay brings privacy-first crypto payments to WhatsApp's 2+ billion users and Sms. Send money to phone numbers, not wallet addresses. Transaction amounts stay hidden on-chain using zero-knowledge proofs.
 
-**Key Features:**
-- 📱 Send to phone numbers (no wallet addresses)
-- 🔒 Hidden amounts on-chain (zero-knowledge proofs)
-- 💬 WhatsApp interface (no app download)
-- 💵 USD1 stablecoin (stable value)
-- ✅ Compliance-ready (Range API screening)
+**The Problem:**
+- Traditional crypto payments expose amounts on public blockchains
+- Users need to share long wallet addresses
+- No privacy for sender or recipient
+- Complex UX barriers for mainstream adoption
 
----
-
-## Project Status: Task 1 - Setup Complete ✅
-
-### What's Been Done
-- ✅ Project structure created
-- ✅ TypeScript configuration
-- ✅ Dependencies defined in package.json
-- ✅ Environment variables template
-- ✅ Basic type definitions
-- ✅ Configuration module
-- ✅ Database service (SQLite)
-- ✅ Command parser utility
-
-### Next Steps
-1. Install dependencies: `npm install`
-2. Register for WhatsApp Business API (see guide below)
-3. Copy `.env.example` to `.env` and fill in credentials
-4. Proceed to Task 2: WhatsApp Webhook implementation
+**The Solution:**
+HushPay combines multiple privacy protocols with WhatsApp's familiar interface to create truly private, phone-to-phone crypto payments.
 
 ---
 
-## Quick Start
+## 🎯 Core Features
 
-### 1. Install Dependencies
-
-```bash
-cd whisperpay
-npm install
-```
-
-### 2. Set Up Environment Variables
-
-```bash
-cp .env.example .env
-```
-
-Then edit `.env` with your credentials (see WhatsApp setup guide below).
-
-### 3. Run Development Server
-
-```bash
-npm run dev
-```
-
----
-
-## How It Works
+### 1. Phone-to-Phone Payments
+Send crypto using phone numbers instead of wallet addresses.
 
 ```
-User: "send 50 usd1 to +234..."
-  ↓
-HushPay Bot receives message
-  ↓
-Screens addresses (Range API)
-  ↓
-Private transfer (ShadowWire - amount hidden)
-  ↓
-Both parties notified
-  ↓
-Transaction on Solscan shows [PRIVATE]
+You: "send 50 usd1 to +234..."
+HushPay: ✓ Sent! Amount hidden on-chain.
 ```
 
+No copying addresses. No blockchain explorers. Just like sending a text message.
+
+### 2. Triple Privacy Layers
+
+**🔒 Amount Hidden (ShadowWire)**
+- Transaction amounts invisible on Solscan
+- Uses Bulletproofs zero-knowledge technology
+- Radr Labs integration
+
+**👤 Sender Hidden (Privacy Cash)**
+- Anonymous transfers via private pool
+- Recipient can't see who sent it
+- Deposit → Mix → Withdraw flow
+
+**🌉 Cross-Chain Hidden (SilentSwap)**
+- Private bridge from Solana to Ethereum/Avalanche/Polygon
+- Converts SOL → USDC privately
+- No public bridge records
+
+### 3. Social Payment Features
+
+**Split Bills**
+```
+"split 100 sol with +234..., +234..., +234..."
+```
+- Divides amount equally among recipients
+- Each person gets a private transfer
+- Perfect for group dinners, shared expenses
+
+**Payment Requests**
+```
+"request 50 sol from +234..."
+```
+- Sends WhatsApp message to requester
+- One-tap payment link
+- No back-and-forth coordination
+
+**Recurring Payments**
+```
+"send 10 sol to +234... every week"
+```
+- Scheduled private transfers
+- Daily, weekly, or monthly
+- Auto-sends and notifies both parties
+
+### 4. Multi-Language Support
+Speak your language. HushPay responds in:
+- 🇺🇸 English
+- 🇪🇸 Spanish
+- 🇫🇷 French
+- 🇧🇷 Portuguese
+
+Auto-detects based on phone country code or manual selection.
+
+### 5. Beautiful Receipts
+Every transaction gets a shareable receipt with:
+- Privacy badges (🔒 PRIVATE, 👤 ANONYMOUS, 🌉 CROSS-CHAIN)
+- QR code linking to Solscan
+- Timestamp and transaction details
+- Hosted on Cloudinary
+
+### 6. Price Alerts
+```
+"alert me when sol hits $200"
+```
+Get WhatsApp notifications when your tokens reach target prices.
+
+### 7. Compliance-Ready
+Every transaction screened through Range API:
+- Sanctions list checking
+- Risk assessment
+- Blocks flagged addresses
+- Audit trail for regulators
+
 ---
 
-## WhatsApp Business API Setup Guide
+## 🎨 User Experience
 
-### Step 1: Create Meta Business Account
+### Conversational AI
+Powered by Google Gemini 2.5 Flash. Talk naturally:
 
-1. Go to [business.facebook.com](https://business.facebook.com)
-2. Click "Create Account"
-3. Fill in your business details
-4. Verify your email
+```
+You: "how much do I have?"
+HushPay: 💰 Balance
+         Public: 2.5 SOL, 100 USD1
+         Private: 1.2 SOL
 
-### Step 2: Create Meta Developer App
+You: "send 0.5 sol to +234..."
+HushPay: Send 0.5 SOL to +234...? 
+         Amount hidden on-chain.
+         Reply YES to confirm.
 
-1. Go to [developers.facebook.com](https://developers.facebook.com)
-2. Click "My Apps" → "Create App"
-3. Select "Business" as app type
-4. Fill in app details:
-   - **App Name:** WhisperPay Bot
-   - **App Contact Email:** Your email
-   - **Business Account:** Select your business account
-5. Click "Create App"
-
-### Step 3: Add WhatsApp Product
-
-1. In your app dashboard, find "WhatsApp" in the products list
-2. Click "Set Up"
-3. Select your Business Account
-4. Click "Continue"
-
-### Step 4: Get Test Phone Number
-
-Meta provides a free test phone number for development:
-
-1. In WhatsApp settings, go to "API Setup"
-2. You'll see a test phone number (e.g., +1 555-0100)
-3. Copy the **Phone Number ID** - you'll need this for `.env`
-4. Add your personal phone number to "To" field and click "Send Message"
-5. You should receive a test message on WhatsApp
-
-### Step 5: Get Access Token
-
-1. In the same "API Setup" page, find "Temporary access token"
-2. Copy this token - it's valid for 24 hours (we'll get permanent one later)
-3. Paste it in your `.env` file as `WHATSAPP_TOKEN`
-
-### Step 6: Configure Webhook (Do this in Task 2)
-
-We'll set this up when we implement the webhook server.
-
-### Step 7: Get Permanent Access Token (Optional for now)
-
-For production, you'll need a permanent token:
-
-1. Go to "App Settings" → "Basic"
-2. Copy your **App ID** and **App Secret**
-3. Use these to generate a permanent token (we'll do this later)
-
----
-
-## Environment Variables Needed
-
-After WhatsApp setup, your `.env` should have:
-
-```env
-# From WhatsApp API Setup page
-WHATSAPP_TOKEN=EAAxxxxxxxxxx  # Temporary access token
-WHATSAPP_PHONE_ID=123456789   # Phone Number ID
-WHATSAPP_VERIFY_TOKEN=whisperpay_verify  # You choose this
-
-# These we'll set up in later tasks
-HELIUS_RPC_URL=https://mainnet.helius-rpc.com/?api-key=your_key
-RANGE_API_KEY=your_range_api_key
-SHADOWWIRE_API_KEY=your_shadowwire_key
-ENCRYPTION_KEY=your_32_character_encryption_key
+You: "yes"
+HushPay: ✓ Sent! [PRIVATE]
+         https://solscan.io/tx/...
 ```
 
----
-
-## Project Structure
-
+### Transaction History
 ```
-whisperpay/
-├── docs/
-│   ├── IMPLEMENTATION_PLAN.md
-│   └── PROJECT_BRIEF.md
-├── src/
-│   ├── config/
-│   │   └── index.ts          # Configuration management
-│   ├── services/
-│   │   └── database.ts       # SQLite database service
-│   ├── types/
-│   │   └── index.ts          # TypeScript type definitions
-│   └── utils/
-│       └── parser.ts         # Command parser
-├── .env.example              # Environment variables template
-├── .gitignore
-├── package.json
-├── tsconfig.json
-└── README.md
+💸 Recent Payments
+
+→ Sent *1.5 SOL*
++234...7890 🔒 [PRIVATE] ✓
+https://solscan.io/tx/...
+
+← Received *0.8 SOL*
++234...1234 🔒 [PRIVATE] ✓
+https://solscan.io/tx/...
 ```
 
----
-
-## Tech Stack
-
-- **Runtime:** Node.js + TypeScript
-- **Framework:** Express.js
-- **Database:** SQLite (better-sqlite3)
-- **Blockchain:** Solana (@solana/web3.js)
-- **Privacy:** ShadowWire (Radr Labs)
-- **Compliance:** Range API
-- **Infrastructure:** Helius RPC
-- **Messaging:** WhatsApp Cloud API
+Clickable Solscan links. Clear privacy indicators. Beautiful formatting.
 
 ---
 
-## Development Workflow
+## 🏗️ Architecture
 
-1. **Task 1 (Current):** Project setup + WhatsApp registration
-2. **Task 2:** Implement webhook to receive messages
-3. **Task 3:** Implement sending messages back
-4. **Task 4:** Command parsing
-5. **Task 5:** User & wallet management
-6. **Task 6:** Solana integration
-7. **Task 7:** Range compliance
-8. **Task 8:** ShadowWire private transfers
-9. **Task 9:** Helius webhooks
-10. **Task 10:** Receipt generation
-11. **Task 11:** Error handling & polish
-12. **Task 12:** Deployment
+### Privacy Stack
+- **ShadowWire** - Amount-hidden transfers using Bulletproofs
+- **Privacy Cash** - Anonymous sender via private pool mixing
+- **SilentSwap** - Cross-chain private bridge with facilitator groups
 
----
+### Infrastructure
+- **Helius** - RPC + webhook notifications for incoming transfers
+- **Range API** - Real-time compliance screening
+- **Twilio** - WhatsApp Business API integration
+- **Cloudinary** - Image hosting for QR codes and receipts
 
-## Troubleshooting
+### Database
+SQLite with encrypted private keys:
+- Users (phone, wallet, encrypted key, language)
+- Transfers (sender, recipient, amount, token, tx, status)
+- Recurring payments (schedule, frequency, next run)
+- Price alerts (token, price, condition)
 
-### Can't create Meta Business Account
-- Make sure you're using a verified Facebook account
-- Some regions may have restrictions
-
-### Don't see WhatsApp in products list
-- Make sure your app type is "Business"
-- Refresh the page and check again
-
-### Test message not received
-- Verify your phone number is added to the "To" field
-- Check that your phone has WhatsApp installed
-- Try a different phone number
-
-### Access token expired
-- Temporary tokens expire in 24 hours
-- Generate a new one from the API Setup page
-- For production, use permanent tokens
+### Security
+- Private keys encrypted with AES-256
+- 5-minute expiry on pending confirmations
+- Phone number normalization
+- Wallet screening before every transfer
 
 ---
 
-## Resources
+## 💬 Command Reference
 
-- [WhatsApp Cloud API Docs](https://developers.facebook.com/docs/whatsapp/cloud-api)
-- [Meta Business Help Center](https://www.facebook.com/business/help)
-- [Solana Docs](https://docs.solana.com)
-- [ShadowWire API](https://registry.scalar.com/@radr/apis/shadowpay-api)
+### Send Money
+| Command | Description |
+|---------|-------------|
+| `send 1 sol to +234...` | Amount-hidden transfer |
+| `send anon 0.5 sol to 7xKX...` | Anonymous sender (needs wallet) |
+| `send 1 sol to +234... on ethereum` | Cross-chain private bridge |
+| `split 100 sol with +234..., +234...` | Group payment |
+| `send 10 sol to +234... every week` | Recurring payment |
+
+### Balance & Wallet
+| Command | Description |
+|---------|-------------|
+| `balance` | Check public + private balance |
+| `wallet` or `qr` | Get wallet address with QR code |
+| `deposit 1 sol` | Deposit to private pool |
+| `withdraw 0.5 sol` | Withdraw from private pool |
+
+### History & Requests
+| Command | Description |
+|---------|-------------|
+| `receipts` | View transaction history with links |
+| `request 50 sol from +234...` | Request payment |
+
+### Alerts & Settings
+| Command | Description |
+|---------|-------------|
+| `alert me when sol hits $200` | Price alert |
+| `set language to spanish` | Change language |
+| `help` | Show all commands |
 
 ---
 
-## License
+## 🎯 Hackathon Bounties
+
+HushPay targets **5 bounty tracks** with a total potential of **$41,500**:
+
+| Track | Prize | Integration |
+|-------|-------|-------------|
+| **Radr Labs** | $15,000 | ShadowWire amount-hidden transfers |
+| **Privacy Cash** | $15,000 | Anonymous sender via private pool |
+| **SilentSwap** | $5,000 | Cross-chain private payments |
+| **Helius** | $5,000 | Webhook notifications + RPC |
+| **Range** | $1,500 | Compliance screening |
+
+### Why HushPay Wins
+
+**1. Real Privacy**
+Not just one privacy layer—three. Amount hidden, sender hidden, and cross-chain hidden.
+
+**2. Mainstream UX**
+WhatsApp interface. Phone numbers instead of addresses. Conversational AI. No crypto jargon.
+
+**3. Social Features**
+Split bills, payment requests, recurring payments. Features people actually use.
+
+**4. Production Ready**
+- Running on mainnet
+- Real transactions with USD1 stablecoin
+- Compliance screening
+- Multi-language support
+- Error handling and fallbacks
+
+**5. Technical Depth**
+- Full SilentSwap integration with facilitator groups
+- Privacy Cash pool mixing
+- ShadowWire Bulletproofs
+- Background job processor for recurring payments
+- Helius webhook handling
+
+---
+
+## 🌟 Use Cases
+
+### 1. Remittances
+Send money home privately. No one knows how much you're sending.
+
+### 2. Freelance Payments
+Get paid without revealing your wallet balance to clients.
+
+### 3. Group Expenses
+Split dinner bills, rent, or trip costs with friends.
+
+### 4. Donations
+Support causes anonymously. Recipient can't track you.
+
+### 5. Subscriptions
+Set up recurring payments for services, rent, or allowances.
+
+### 6. Cross-Border Payments
+Bridge from Solana to Ethereum/Avalanche privately.
+
+---
+
+## 🔐 Privacy Guarantees
+
+### What's Hidden
+✅ Transaction amounts (ShadowWire)
+✅ Sender identity (Privacy Cash)
+✅ Cross-chain bridge records (SilentSwap)
+✅ Wallet addresses (phone-to-phone)
+
+### What's Visible
+- Transaction occurred (timestamp on-chain)
+- Recipient wallet (but not linked to phone)
+- Token type (SOL, USD1, etc.)
+
+### What's Encrypted
+- Private keys (AES-256 in database)
+- Pending action data
+- User preferences
+
+---
+
+## 🚀 Technical Highlights
+
+### Smart Fallbacks
+- ShadowWire → Regular Solana transfer on devnet
+- Privacy Cash → Only on mainnet (devnet check)
+- Cloudinary → Text-only fallback if not configured
+
+### Background Jobs
+- Recurring payment processor (5-min intervals)
+- Price alert checker (5-min intervals)
+- Helius webhook listener (real-time)
+
+### AI Integration
+- Google Gemini 2.5 Flash
+- Intent extraction from natural language
+- Multi-language response generation
+- Context-aware conversations
+
+### Image Generation
+- QR codes with Canvas
+- Receipt images with privacy badges
+- Cloudinary upload and hosting
+- WhatsApp media message support
+
+---
+
+## 📊 Stats
+
+- **3 Privacy Protocols** integrated
+- **5 Bounty Tracks** targeted
+- **4 Languages** supported
+- **10+ Commands** available
+- **$41.5k** total prize potential
+
+---
+
+## 🎬 Demo Flow
+
+1. **User texts:** "send 50 usd1 to +234..."
+2. **HushPay:** Creates wallet if new user
+3. **HushPay:** Screens addresses via Range API
+4. **HushPay:** Asks for confirmation
+5. **User:** "yes"
+6. **HushPay:** Executes private transfer via ShadowWire
+7. **HushPay:** Generates receipt with QR code
+8. **HushPay:** Notifies both parties
+9. **Solscan:** Shows [PRIVATE] amount 🔒
+
+---
+
+## 🏆 Why This Matters
+
+**Privacy is a human right.** But current crypto solutions force users to choose between privacy and usability. HushPay proves you can have both.
+
+By combining:
+- Multiple privacy protocols
+- Familiar messaging interface
+- Social payment features
+- Compliance screening
+
+HushPay makes private crypto payments accessible to billions of WhatsApp users worldwide.
+
+**Quiet money moves. Loud impact.**
+
+---
+
+## 📝 License
 
 MIT
 
 ---
 
-## Hackathon Submission
+## 🔗 Links
 
-**Solana Privacy Hackathon 2026**
-- **Project:** HushPay - Quiet money moves
-- Submission Deadline: February 1, 2026
-- Target Tracks: Radr Labs ($15k), Helius ($5k), Range ($1.5k)
-- Total Prize Potential: $21.5k
+- **Solana Privacy Hackathon 2026**
+- **Submission Deadline:** February 1, 2026
+- **Built with:** ShadowWire, Privacy Cash, SilentSwap, Helius, Range
+
+---
+
+*HushPay - Because your finances are nobody's business but yours.* 🤫

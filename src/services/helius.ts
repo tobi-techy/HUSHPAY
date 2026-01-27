@@ -19,10 +19,20 @@ export async function registerWalletForNotifications(walletAddress: string): Pro
       });
       webhookId = data.webhookID;
     } else {
-      // Add address to existing webhook
-      await axios.put(`${HELIUS_API}/webhooks/${webhookId}?api-key=${config.helius.apiKey}`, {
-        accountAddresses: [walletAddress],
-      });
+      // GET existing webhook to get current addresses
+      const { data: existing } = await axios.get(`${HELIUS_API}/webhooks/${webhookId}?api-key=${config.helius.apiKey}`);
+      const currentAddresses: string[] = existing.accountAddresses || [];
+      
+      // Only add if not already registered
+      if (!currentAddresses.includes(walletAddress)) {
+        // PUT with combined addresses (PUT replaces entire config)
+        await axios.put(`${HELIUS_API}/webhooks/${webhookId}?api-key=${config.helius.apiKey}`, {
+          webhookURL: `${config.server.baseUrl}/webhook/helius`,
+          transactionTypes: ['TRANSFER'],
+          accountAddresses: [...currentAddresses, walletAddress],
+          webhookType: 'enhanced',
+        });
+      }
     }
   } catch (err: any) {
     console.error('Helius webhook error:', err.response?.data || err.message);

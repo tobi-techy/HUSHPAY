@@ -35,10 +35,8 @@ export async function getPrivateBalance(encryptedPrivateKey: string, token: stri
     if (token.toUpperCase() === 'SOL') {
       const balance = await client.getPrivateBalance();
       return balance.lamports / 1e9;
-    } else if (token.toUpperCase() === 'USDC') {
-      const balance = await client.getPrivateBalanceUSDC();
-      return balance.amount / 1e6;
     } else {
+      // All SPL tokens use getPrivateBalanceSpl with mint address
       const mint = getMintAddress(token);
       if (!mint) return 0;
       const balance = await client.getPrivateBalanceSpl(new PublicKey(mint));
@@ -61,10 +59,8 @@ export async function depositToPrivate(encryptedPrivateKey: string, amount: numb
     if (token.toUpperCase() === 'SOL') {
       const res = await client.deposit({ lamports: Math.floor(amount * 1e9) });
       return { success: true, txSignature: res.tx };
-    } else if (token.toUpperCase() === 'USDC') {
-      const res = await client.depositUSDC({ base_units: Math.floor(amount * 1e6) });
-      return { success: true, txSignature: res.tx };
     } else {
+      // All SPL tokens use depositSPL
       const mint = getMintAddress(token);
       if (!mint) return { success: false, error: 'Unsupported token' };
       const res = await client.depositSPL({ amount: Math.floor(amount * getDecimals(token)), mintAddress: new PublicKey(mint) });
@@ -87,10 +83,8 @@ export async function withdrawFromPrivate(encryptedPrivateKey: string, amount: n
     if (token.toUpperCase() === 'SOL') {
       const res = await client.withdraw({ lamports: Math.floor(amount * 1e9), recipientAddress });
       return { success: true, txSignature: res.tx };
-    } else if (token.toUpperCase() === 'USDC') {
-      const res = await client.withdrawUSDC({ base_units: Math.floor(amount * 1e6), recipientAddress });
-      return { success: true, txSignature: res.tx };
     } else {
+      // All SPL tokens use withdrawSPL
       const mint = getMintAddress(token);
       if (!mint) return { success: false, error: 'Unsupported token' };
       const res = await client.withdrawSPL({ amount: Math.floor(amount * getDecimals(token)), mintAddress: new PublicKey(mint), recipientAddress });
