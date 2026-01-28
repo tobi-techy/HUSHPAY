@@ -136,8 +136,10 @@ const PixelPhoneDemo = () => {
 };
 
 export default function App() {
-  // Add a flicker state to simulate occasional CRT glitch
   const [flicker, setFlicker] = useState(1);
+  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [email, setEmail] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   
   useEffect(() => {
     const interval = setInterval(() => {
@@ -148,6 +150,20 @@ export default function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      setSubmitted(true);
+    } catch (err) {
+      console.error('Waitlist submission failed:', err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden scanlines selection:bg-green-500 selection:text-black" style={{opacity: flicker}}>
@@ -165,7 +181,7 @@ export default function App() {
             <a href="#privacy" className="hover:text-green-400 hover:underline decoration-2 underline-offset-4 decoration-green-500 transition-all">[PRIVACY]</a>
             <a href="#compliance" className="hover:text-green-400 hover:underline decoration-2 underline-offset-4 decoration-green-500 transition-all">[COMPLIANCE]</a>
           </div>
-          <PixelButton className="text-lg py-1 px-4">
+          <PixelButton onClick={() => setShowWaitlist(true)} className="text-lg py-1 px-4">
             EARLY_ACCESS
           </PixelButton>
         </div>
@@ -189,7 +205,10 @@ export default function App() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-6 justify-center md:justify-start pt-8">
-            <PixelButton className="text-2xl py-4 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)]">
+            <PixelButton 
+              onClick={() => setShowWaitlist(true)}
+              className="text-2xl py-4 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)]"
+            >
                START CHATTING_
             </PixelButton>
             <PixelButton variant="secondary" className="text-2xl py-4">
@@ -393,6 +412,61 @@ export default function App() {
       </footer>
       
       <Cityscape />
+
+      {/* Waitlist Modal */}
+      {showWaitlist && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowWaitlist(false)}>
+          <div className="bg-black border-4 border-green-500 max-w-lg w-full p-8 shadow-[0_0_50px_rgba(34,197,94,0.3)] relative" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setShowWaitlist(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl"
+            >
+              ×
+            </button>
+            
+            {!submitted ? (
+              <>
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">🤫</div>
+                  <h3 className="text-3xl font-bold mb-2 text-green-500">MAINNET-BETA</h3>
+                  <p className="text-xl text-gray-400 font-mono">LAUNCHING FEBRUARY 25, 2026</p>
+                </div>
+
+                <div className="border-2 border-yellow-500 bg-yellow-900/20 p-4 mb-6 text-yellow-300 text-sm">
+                  <span className="font-bold">⚠️ EARLY ACCESS:</span> Join the waitlist to get notified when we go live.
+                </div>
+
+                <form onSubmit={handleWaitlistSubmit} className="space-y-6">
+                  <div>
+                    <label className="block text-gray-400 mb-2 font-mono text-sm uppercase">Email Address</label>
+                    <PixelInput 
+                      type="email" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                      className="w-full"
+                    />
+                  </div>
+
+                  <PixelButton type="submit" className="w-full text-xl py-3">
+                    JOIN WAITLIST_
+                  </PixelButton>
+                </form>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-6xl mb-4">✓</div>
+                <h3 className="text-3xl font-bold mb-4 text-green-500">YOU'RE ON THE LIST!</h3>
+                <p className="text-xl text-gray-400 mb-6">We'll notify you on February 25th when mainnet-beta launches.</p>
+                <PixelButton onClick={() => setShowWaitlist(false)} className="text-xl py-3">
+                  CLOSE_
+                </PixelButton>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
