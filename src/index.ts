@@ -590,6 +590,20 @@ app.post('/confirm/:token', async (req, res) => {
 
 app.get('/', (req, res) => res.send('HushPay Running'));
 
+// Waitlist endpoint
+app.post('/api/waitlist', async (req, res) => {
+  try {
+    const { email, phone } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+    
+    db.addWaitlistEntry(email, phone || null);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Waitlist error:', err);
+    res.status(500).json({ error: 'Failed to join waitlist' });
+  }
+});
+
 const server = app.listen(config.server.port, () => {
   console.log(`HushPay running on port ${config.server.port}`);
   startRecurringPaymentProcessor();

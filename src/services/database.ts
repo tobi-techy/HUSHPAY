@@ -93,6 +93,13 @@ class DatabaseService {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_audit_phone ON audit_logs(phone);
+
+      CREATE TABLE IF NOT EXISTS waitlist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        phone TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
   }
 
@@ -436,6 +443,16 @@ class DatabaseService {
         break;
     }
     return now.toISOString();
+  }
+
+  // Waitlist methods
+  addWaitlistEntry(email: string, phone: string | null) {
+    this.db.prepare('INSERT OR IGNORE INTO waitlist (email, phone) VALUES (?, ?)').run(email, phone);
+  }
+
+  getWaitlist(): { id: number; email: string; phone: string | null; createdAt: string }[] {
+    const rows = this.db.prepare('SELECT id, email, phone, created_at as createdAt FROM waitlist ORDER BY created_at DESC').all() as any[];
+    return rows;
   }
 
   close() {

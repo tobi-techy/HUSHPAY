@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd hushpay_website && npm install && vite build",
+  "outputDirectory": "hushpay_website/dist",
+  "installCommand": "echo 'skip'"
+}
